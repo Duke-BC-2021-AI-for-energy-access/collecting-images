@@ -95,34 +95,39 @@ def download_background_image(input_df:pd.DataFrame, output_dir: str,
 
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument('-i', '--input',
+    parser = ArgumentParser()
+    parser._action_groups.pop()
+    required = parser.add_argument_group('required arguments')
+    optional = parser.add_argument_group('optional arguments')
+
+    required.add_argument('-i', '--input',
                         help='path to csv input file',
-                        type=str)
-    parser.add_argument('-ad', '--adjacent_distance',
+                        type=str, required=True)
+    required.add_argument('-ad', '--adjacent_distance',
                         help='radial distance from the input lon, lat used as '
                              'new centers to download background images',
                         default=3000,
-                        type=float)
-    parser.add_argument('-e', '--errorlog',
+                        type=float, required=True)
+    required.add_argument('-e', '--errorlog',
                         help='path to error log file',
                         default='images/error.log',
-                        type=str)
-    parser.add_argument('-o', '--output_dir',
+                        type=str, required=True)
+    required.add_argument('-o', '--output_dir',
                         help='path to output directory',
                         default='images/RGB_background',
-                        type=str)
-    parser.add_argument('-d', '--distance',
+                        type=str, required=True)
+    required.add_argument('-d', '--distance',
                         help='radial distance from the new adjacent centers',
                         default=1350,
-                        type=float)
-    parser.add_argument('-fn', '--fname_col',
+                        type=float, required=True)
+    required.add_argument('-fn', '--fname_col',
                         help='name of column to use in the filename',
                         default='state',
-                        type=str)
-    parser.add_argument('-id', '--id_col',
+                        type=str, required=True)
+    required.add_argument('-id', '--id_col',
                         help='name of the column that contains the point id',
                         default='id',
-                        type=str)
+                        type=str, required=True)
 
     args = parser.parse_args()
     if not os.path.exists(args.output_dir):
