@@ -6,6 +6,7 @@ import time
 import pandas as pd
 from pathlib import Path
 from tqdm import tqdm
+from multiprocessing.dummy import Pool as ThreadPool
 
 # gee download package
 from gee_utils import bbox_from_point
@@ -58,7 +59,7 @@ def add_adj_coords(input_filepath: str, output_dir: str,
 
 def download_background_image(input_df:pd.DataFrame, output_dir: str,
                               errorlog: str, distance: float,
-                              fname_col: str, id: str):
+                              fname_col: str, id: str, nthreads: int):
     """"
     Takes as input a df and returns raw images collected from surrounding areas
     Arguments:
@@ -67,11 +68,20 @@ def download_background_image(input_df:pd.DataFrame, output_dir: str,
         distance: radial distance from input lon, lat as center
         fname: column used as filename for the output image record
         id: column that contains point id
+        nthreads: number of threads
     Returns:
         raw set of RGB-N images.
     """
     logf = open(errorlog, "w")
-    for index, row in tqdm(input_df.iterrows()):
+    arr = []
+    for index, row in input_df.iterrows():
+        arr.append((index, row))
+
+    def dl(ir):
+        """
+            Internal wrapper to download each row to threadpool
+        """
+        index, row = ir
         #lat, lon = row['lat'], row['lon'];
         SE_lat, SE_lon = row['SE_lat'], row['SE_lon'];
         NW_lat, NW_lon = row['NW_lat'], row['NW_lon'];
@@ -91,38 +101,52 @@ def download_background_image(input_df:pd.DataFrame, output_dir: str,
             except Exception as e:
                 logf.write(f"point id {row[id]}: {e}\n")
             pass
+    
+    pool = ThreadPool(nthreads)
+
+    results = pool.map(dl, arr)
+
 
 
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument('-i', '--input',
+    parser = ArgumentParser()
+    parser._action_groups.pop()
+    required = parser.add_argument_group('required arguments')
+    optional = parser.add_argument_group('optional arguments')
+
+    required.add_argument('-i', '--input',
                         help='path to csv input file',
-                        type=str)
-    parser.add_argument('-ad', '--adjacent_distance',
-                        help='radial distance from the input lon, lat used as '
-                             'new centers to download background images',
-                        default=3000,
-                        type=float)
-    parser.add_argument('-e', '--errorlog',
+                        type=str, required=True)
+    required.add_argument('-e', '--errorlog',
                         help='path to error log file',
                         default='images/error.log',
-                        type=str)
-    parser.add_argument('-o', '--output_dir',
+                        type=str, required=True)
+    required.add_argument('-o', '--output_dir',
                         help='path to output directory',
                         default='images/RGB_background',
-                        type=str)
-    parser.add_argument('-d', '--distance',
-                        help='radial distance from the new adjacent centers',
-                        default=1350,
-                        type=float)
-    parser.add_argument('-fn', '--fname_col',
+                        type=str, required=True)
+    required.add_argument('-fn', '--fname_col',
                         help='name of column to use in the filename',
                         default='state',
-                        type=str)
-    parser.add_argument('-id', '--id_col',
+                        type=str, required=True)
+    required.add_argument('-id', '--id_col',
                         help='name of the column that contains the point id',
                         default='id',
-                        type=str)
+                        type=str, required=True)
+    optional.add_argument('-d', '--distance',
+                        help='radial distance from the new adjacent centers. defaults to 1350',
+                        default=1350,
+                        type=float)
+    optional.add_argument('-ad', '--adjacent_distance',
+                        help='radial distance from the input lon, lat used as '
+                             'new centers to download background images. defaults to 3000',
+                        default=3000,
+                        type=float)
+    optional.add_argument('-@', '--num_threads', 
+                        help='number of concurrent threads for downloading',
+                        default=10,
+                        type=int, required=False)
 
     args = parser.parse_args()
     if not os.path.exists(args.output_dir):
@@ -132,4 +156,4 @@ if __name__ == "__main__":
     adj_df = add_adj_coords(args.input, args.output_dir,
                             args.adjacent_distance)
     download_background_image(adj_df, args.output_dir, args.errorlog,
-                              args.distance, args.fname_col, args.id_col)
+                              args.distance, args.fname_col, args.id_col, args.num_threads)
