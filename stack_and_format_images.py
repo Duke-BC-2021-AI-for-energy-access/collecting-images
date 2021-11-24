@@ -4,6 +4,7 @@ from argparse import ArgumentParser
 from glob import glob
 
 import numpy as np
+import random
 import rasterio
 
 from PIL import Image
@@ -31,22 +32,31 @@ def read_tiff_meta(geotiff_path):
     return img_meta, pixel_size_x, pixel_size_y
 
 
-def crop_image(img, new_squared_size: int):
-    """crop the center of the image a defined squared size"""
+def crop_image(img, new_squared_size: int, random_crop: bool, rdist:int):
+    """crop the center of the image a defined squared size
+       bool random_crop for randomly cropping the image by shifting size rdist in them
+       horizontal and vertical directions"""
 
     # get current dimensions
     width, height = img.size
     # crop image
     new_width = new_squared_size
     new_height = new_width
+    
+    # handle the case of random cropping by initializing horizontal and vertical shifts
+    hshift = 0
+    vshift = 0
+    if random_crop:
+        hshift = random.randint(-rdist, rdist)
+        vshift = random.randint(-rdist, rdist)
+    
     # https://stackoverflow.com/questions/16646183/crop-an-image-in-the-centre-using-pil.
-    left = (width - new_width)/2
-    top = (height - new_height)/2
-    right = (width + new_width)/2
-    bottom = (height + new_height)/2
+    left = (width - new_width)/2 + hshift
+    top = (height - new_height)/2 + vshift
+    right = (width + new_width)/2 + hshift
+    bottom = (height + new_height)/2 + vshift
     img = img.crop((left, top, right, bottom))
     return img
-
 
 if __name__ == "__main__":
     parser = ArgumentParser()
@@ -65,6 +75,13 @@ if __name__ == "__main__":
                         help='squared image size in pixels',
                         default=1300,
                         type=int)
+    parser.add_argument('-r', '--random_crop',
+                        help='random cropping around center of image, add flag if wanted',
+                        default=False, action="store_true")
+    parser.add_argument('-rd', '--rdist',
+                        help='magnitude of the random jitter -- do not let rdist exceed half of square edge length',
+                        default=70,
+                        type=int)
 
     args = parser.parse_args()
 
@@ -81,7 +98,7 @@ if __name__ == "__main__":
     for directory in tqdm(img_dirs, desc="processing images"):
         img = stack_RGB_bands(directory) # dont stack infrared band
         img = Image.fromarray(img)
-        img = crop_image(img, args.image_size)
+        img = crop_image(img, args.image_size, args.random_crop, args.rdist)
 
         # the name of the directory has land cover type and point ID, we use it to name the file
         filename = os.path.split(directory)[-1]  # the split char could be different if
