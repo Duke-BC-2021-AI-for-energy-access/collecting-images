@@ -58,7 +58,7 @@ def add_adj_coords(input_filepath: str, output_dir: str,
 
 def download_background_image(input_df:pd.DataFrame, output_dir: str,
                               errorlog: str, distance: float,
-                              fname_col: str, id: str, background: bool):
+                              fname_col: str):
     """"
     Takes as input a df and returns raw images collected from surrounding areas
     Arguments:
@@ -66,7 +66,6 @@ def download_background_image(input_df:pd.DataFrame, output_dir: str,
         output_dir: path to output directory
         distance: radial distance from input lon, lat as center
         fname: column used as filename for the output image record
-        id: column that contains point id
     Returns:
         raw set of RGB-N images.
     """
@@ -82,19 +81,19 @@ def download_background_image(input_df:pd.DataFrame, output_dir: str,
         bbox_NW = convert_bbox_latlon_lonlat(bbox_NW)
 
         for suffix, bb in zip(['_SE', '_NW'], [bbox_SE, bbox_NW]):
-            fname = f"{output_dir}/{row[fname_col]}_id_{row[id]}_{index}"
+            fname = f"{output_dir}/{row['region']}_{row[fname_col]}"
             if os.path.exists(f'{fname+suffix}'): # or point['rand_point_id'] in error_points:
                 continue
             try:
                 download_NAIP_toLocal(bb, fname+suffix)
                 os.remove(f'{fname+suffix}.zip')
             except Exception as e:
-                logf.write(f"point id {row[id]}: {e}\n")
+                logf.write(f"point id {row[fname_col]}: {e}\n")
             pass
 
 def download_overhead_image(input_df:pd.DataFrame, output_dir: str,
                               errorlog: str, distance: float,
-                              fname_col: str, id: str):
+                              fname_col: str):
     """"
     Takes as input a df and returns raw images collected from overhead
     Arguments:
@@ -102,23 +101,22 @@ def download_overhead_image(input_df:pd.DataFrame, output_dir: str,
         output_dir: path to output directory
         distance: radial distance from input lon, lat as center
         fname: column used as filename for the output image record
-        id: column that contains point id
     Returns:
         raw set of RGB-N images.
     """
     logf = open(errorlog, "w")
     for index, row in tqdm(input_df.iterrows()):
-        lat, lon, region, ind = row['lat'], row['lon'], row['region'], row['index']
+        lat, lon, region, uid = row['lat'], row['lon'], row['region'], row[fname_col]
         bbox = bbox_from_point((lat, lon), dist=distance)
         bbox_overhead = convert_bbox_latlon_lonlat(bbox)
-        fname = f"{output_dir}/{region}_{ind}"
+        fname = f"{output_dir}/{region}_{uid}"
         if os.path.exists(f'{fname}'): # or point['rand_point_id'] in error_points:
             continue
         try:
             download_NAIP_toLocal(bbox_overhead, fname)
             os.remove(f'{fname}.zip')
         except Exception as e:
-            logf.write(f"point id {row[id]}: {e}\n")
+            logf.write(f"point id {uid}: {e}\n")
         pass
 
 if __name__ == "__main__":
@@ -145,11 +143,7 @@ if __name__ == "__main__":
                         type=float)
     parser.add_argument('-fn', '--fname_col',
                         help='name of column to use in the filename',
-                        default='state',
-                        type=str)
-    parser.add_argument('-id', '--id_col',
-                        help='name of the column that contains the point id',
-                        default='id',
+                        default='ID',
                         type=str)
     parser.add_argument('-ov', '--overhead',
                         help='whether or not you want to download overhead images, include flag if yes',
@@ -165,10 +159,10 @@ if __name__ == "__main__":
         # CASE WHEN WE WANT TO DOWNLOAD OVERHEAD IMAGERY
         df = pd.read_csv(args.input)
         download_overhead_image(df, args.output_dir, args.errorlog,
-                              args.distance, args.fname_col, args.id_col)
+                              args.distance, args.fname_col)
     else:
         # CASE WHEN WE WANT TO DOWNLOAD BACKGROUND IMAGERY
         adj_df = add_adj_coords(args.input, args.output_dir,
                             args.adjacent_distance)
         download_background_image(adj_df, args.output_dir, args.errorlog,
-                              args.distance, args.fname_col, args.id_col)
+                              args.distance, args.fname_col)
